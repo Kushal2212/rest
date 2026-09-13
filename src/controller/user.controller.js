@@ -3,16 +3,16 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
 
-
-
 const generateAccessTokenAndRefreshToken = async function (userId) {
   try {
     const user = await User.findById(userId);
-    const refreshToken = user.generateAccessToken();
-    const accessToken = user.generateRefreshToken();
+    const refreshToken = await user.generateRefreshToken();
+    const accessToken = await user.generateAccessToken();
 
-    user.refreshtoken = refreshToken;
+    user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
+
+    // console.log("saved refreshToken:", user.refreshToken);
 
     return { refreshToken, accessToken };
   } catch (error) {
@@ -22,7 +22,7 @@ const generateAccessTokenAndRefreshToken = async function (userId) {
   }
 };
 
-//User Resgistration 
+//User Resgistration
 const userRegister = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -50,56 +50,84 @@ const userRegister = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .json(new ApiResponse(201, (  "user created successfully")));
+    .json(new ApiResponse(201, "user created successfully"));
 });
 
-//Login 
+//Login
 
 const loggedInUser = asyncHandler(async (req, res) => {
-   const {username, email, password} = req.body;
+  const { username, email, password } = req.body;
 
-   if (!email && !username){
-      throw ApiError.badRequest("Invalid email or username")
-   }
+  if (!email && !username) {
+    throw ApiError.badRequest("Invalid email or username");
+  }
 
-   const user = await User.findOne({
-      $or: [{email}, {username}]
-   })
+  const user = await User.findOne({
+    $or: [{ email }, { username }],
+  });
 
-   if(!user){
-      throw ApiError.notFound("User not found")
-   }
+  if (!user) {
+    throw ApiError.notFound("User not found");
+  }
 
-   const isPasswordValid = await user.isPasswordCorrect(password)
+  const isPasswordValid = await user.isPasswordCorrect(password);
 
-   if(!isPasswordValid){
-      throw ApiError.badRequest("Invalid credential")
-   }
+  if (!isPasswordValid) {
+    throw ApiError.badRequest("Invalid credential");
+  }
 
-   const {refreshToken, accessToken} = await generateAccessTokenAndRefreshToken(user._id)
+  const { refreshToken, accessToken } =
+    await generateAccessTokenAndRefreshToken(user._id);
+ 
 
-   const loggedInUser = await User.findById(user._id).select(
-      "-password, -refreshToken",
-   )
+  const loggedInUser = await User.findById(user._id).select(
+    "-password, -refreshToken"
+  );
 
-   const option ={
-      httpOnly:true,
-      secure:true
-   }
+  const option = {
+    httpOnly: true,
+    secure: true,
+  };
 
-   return res
-   .status(200)
-   .cookie("accessToken", accessToken, option)
-   .cookie("refreshToken", refreshToken, option)
-   .json(new ApiResponse(
-      200,
-      {
-         user: loggedInUser,
-         accessToken, 
-         refreshToken
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, option)
+    .cookie("refreshToken", refreshToken, option)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User Logged In successfully"
+      )
+    );
+});
+
+//logout
+
+const logoutUser = asyncHandler(async (req, res) => {
+   const user = await User.findOneAndUpdate(
+    req.username,
+    {
+      $unset: {
+        refreshToken: 1,
       },
-      "User Logged In successfully"
-   ))
-})
+    },
+    {
+      new: true,
+    }
+  );
+  const option = {
+    httpOnly: true,
+    secure: true,
+  };
+  return res
+    .clearCookie("accessToken", option)
+    .clearCookie("refreshToken", option)
+    .json(new ApiResponse(200, user, "User logout successfully"));
+});
 
-export { userRegister, loggedInUser };
+export { userRegister, loggedInUser, logoutUser };
