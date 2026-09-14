@@ -25,24 +25,33 @@ const userSchema = new Schema(
     refreshToken: {
       type: String,
     },
-    profileImage:{
+    profileImage: {
       type: String,
+      public_id: {
+        type: String,
+      },
       required: true,
-      
     },
-    coverImage:{
-      type: String
-    }
+    coverImage: {
+      type: String,
+      public_id: {
+        type: String,
+      },
+    },
+    watchHistory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Video",
+    },
   },
   { timestamps: true }
 );
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {
-    return next
+    return next;
   }
   this.password = await bcrypt.hash(this.password, 10);
-  next
+  next;
 });
 
 userSchema.methods.isPasswordCorrect = async function (password) {
