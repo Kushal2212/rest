@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
+import {uploadOnCloudinary} from "../services/cloudinary.js";
 
 const generateAccessTokenAndRefreshToken = async function (userId) {
   try {
@@ -40,8 +41,35 @@ const userRegister = asyncHandler(async (req, res) => {
     throw ApiError.conflict("User already exist");
   }
 
+  const profileImageLocalPath = req.files?.profileImage[0]?.path;
+  //const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+  let coverImageLocalPath;
+  if (
+    req.files &&
+    Array.isArray(req.files.coverImage) &&
+    req.files.coverImage.length > 0
+  ) {
+    coverImageLocalPath = req.files.coverImage[0].path;
+  }
+
+  if (!profileImageLocalPath) {
+    throw  ApiError.badRequest( "profile file is required");
+  }
+
+  const profileImage = await uploadOnCloudinary(profileImageLocalPath);
+  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  // console.log("profile:", profileImage)
+  // console.log("cover:",  coverImage)
+
+  if (!profileImage) {
+    throw  ApiError.badRequest( "Profile is required");
+  }
+
   const user = await User.create({
-    username,
+    username: username.toLowerCase(),
+    profileImage: profileImage.url,
+    coverImage: coverImage?.url || "",
     email,
     password,
   });
@@ -78,7 +106,6 @@ const loggedInUser = asyncHandler(async (req, res) => {
 
   const { refreshToken, accessToken } =
     await generateAccessTokenAndRefreshToken(user._id);
- 
 
   const loggedInUser = await User.findById(user._id).select(
     "-password, -refreshToken"
@@ -109,7 +136,7 @@ const loggedInUser = asyncHandler(async (req, res) => {
 //logout
 
 const logoutUser = asyncHandler(async (req, res) => {
-   const user = await User.findOneAndUpdate(
+  const user = await User.findOneAndUpdate(
     req.username,
     {
       $unset: {
@@ -122,7 +149,7 @@ const logoutUser = asyncHandler(async (req, res) => {
   );
   const option = {
     httpOnly: true,
-    secure: true,
+    secure: false,
   };
   return res
     .clearCookie("accessToken", option)

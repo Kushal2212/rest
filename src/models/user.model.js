@@ -25,6 +25,14 @@ const userSchema = new Schema(
     refreshToken: {
       type: String,
     },
+    profileImage:{
+      type: String,
+      required: true,
+      
+    },
+    coverImage:{
+      type: String
+    }
   },
   { timestamps: true }
 );
