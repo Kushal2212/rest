@@ -2,8 +2,10 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
-import {uploadOnCloudinary} from "../services/cloudinary.js";
+import { uploadOnCloudinary } from "../services/cloudinary.js";
+import jwt from "jsonwebtoken";
 
+//generate access and refresh token
 const generateAccessTokenAndRefreshToken = async function (userId) {
   try {
     const user = await User.findById(userId);
@@ -54,7 +56,7 @@ const userRegister = asyncHandler(async (req, res) => {
   }
 
   if (!profileImageLocalPath) {
-    throw  ApiError.badRequest( "profile file is required");
+    throw ApiError.badRequest("profile file is required");
   }
 
   const profileImage = await uploadOnCloudinary(profileImageLocalPath);
@@ -63,7 +65,7 @@ const userRegister = asyncHandler(async (req, res) => {
   // console.log("cover:",  coverImage)
 
   if (!profileImage) {
-    throw  ApiError.badRequest( "Profile is required");
+    throw ApiError.badRequest("Profile is required");
   }
 
   const user = await User.create({
@@ -82,7 +84,6 @@ const userRegister = asyncHandler(async (req, res) => {
 });
 
 //Login
-
 const loggedInUser = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -134,7 +135,6 @@ const loggedInUser = asyncHandler(async (req, res) => {
 });
 
 //logout
-
 const logoutUser = asyncHandler(async (req, res) => {
   const user = await User.findOneAndUpdate(
     req.username,
@@ -157,4 +157,59 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "User logout successfully"));
 });
 
-export { userRegister, loggedInUser, logoutUser };
+// generate access token
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  //1. Get refresh token
+  //2. Does it exist?
+  //3. Verify its JWT signature/expiry
+  //4. Find the user
+  /*5. Does this refresh token match
+   the one currently stored for the user?*/
+  /*6. Generate NEW access token
+   + NEW refresh token */
+  //7. Replace old refresh token
+  //8. Send both to client
+  const incomingRefreshToken = req.cookie.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw ApiError.badRequest("Unauthorized request");
+  }
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+    const user = await User.findById(decodedToken?._id);
+    if (!user) {
+      throw ApiError.notFound("Invalid token");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw ApiError.badRequest("Token expired or already used");
+    }
+
+    const { accessToken, newRefreshToken } =
+      await generateAccessTokenAndRefreshToken(user._id);
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken: accessToken, refreshToken: newRefreshToken },
+          "access token refreshed"
+        )
+      );
+  } catch (error) {
+    throw ApiError.badRequest(error?.message || "Invalid refresh token");
+  }
+});
+
+export { userRegister, loggedInUser, logoutUser, refreshAccessToken };
