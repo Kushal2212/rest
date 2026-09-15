@@ -24,7 +24,9 @@ app.use(
 app.use(express.static("public"));
 
 import userRouter from "./src/routes/user.route.js";
+import VideoRouter from "./src/routes/video.route.js"
 
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/videos", VideoRouter)
 
 export { app };
