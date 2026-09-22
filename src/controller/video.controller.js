@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { uploadOnCloudinary } from "../services/cloudinary.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose, { isValidObjectId } from "mongoose";
 import { Video } from "../models/video.model.js";
 import { v2 as cloudindary } from "cloudinary";
@@ -70,9 +70,9 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
 // uploading the video in cloudinary
 const publishVideo = asyncHandler(async (req, res) => {
-  const { title, description } = req.body;
   // console.log("BODY:", req.body);
   // console.log("FILES:", req.files);
+  const { title, description } = req.body;
 
   if ([title, description].some((field) => !field || field.trim() == "")) {
     throw ApiError.badRequest("All fields is required");
@@ -97,17 +97,18 @@ const publishVideo = asyncHandler(async (req, res) => {
   if (!thumbnail) {
     throw ApiError.badRequest("Thumbnail not found");
   }
-
+ console.log("VIDEO FILE:", videoFile);
+console.log("THUMBNAIL:", thumbnail);
   const video = await Video.create({
     title,
     description,
     duration: videoFile.duration,
     videoFile: {
-      url: videoFile.url,
+      url: videoFile.secure_url,
       public_id: videoFile.public_id,
     },
     thumbnail: {
-      url: thumbnail.url,
+      url: thumbnail.secure_url,
       public_id: thumbnail.public_id,
     },
     owner: req.user?._id,
@@ -264,6 +265,25 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     );
 });
 
+//get user video only
+const getMyVideos = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const videos = await Video.find({
+    owner: userId,
+  });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        videos,
+        "User videos fetched successfully"
+      )
+    );
+});
+
 export {
   getAllVideos,
   publishVideo,
@@ -271,4 +291,5 @@ export {
   updateVideo,
   deleteVideo,
   togglePublishStatus,
+  getMyVideos
 };

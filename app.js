@@ -8,11 +8,11 @@ const app = express();
 
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: process.env.CORS_ORIGIN || "http://localhost:5174",
     credentials: true,
   })
 );
-
+app.use(express.json());
 app.use(cookieParser());
 
 app.use(express.json({ limit: "16kb" }));
@@ -34,5 +34,15 @@ import subscriptionRouter  from "./src/routes/subscription.route.js";
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/videos", VideoRouter)
 app.use("/api/v1/subscriptions", subscriptionRouter)
+
+app.use((err, _, res, next) => {
+  const statusCode = err.statusCode || 500;
+
+  res.status(statusCode).json({
+    statusCode,
+    message: err.message || "Something went wrong",
+    success: false,
+  });
+});
 
 export { app };

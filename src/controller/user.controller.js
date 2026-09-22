@@ -2,7 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../services/cloudinary.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import { v2 as cloudinary } from "cloudinary";
 
@@ -29,7 +29,7 @@ const generateAccessTokenAndRefreshToken = async function (userId) {
 //User Resgistration
 const userRegister = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
-
+  
   if (
     [username, email, password].some((field) => !field || field.trim() === "")
   ) {
@@ -44,7 +44,17 @@ const userRegister = asyncHandler(async (req, res) => {
     throw ApiError.conflict("User already exist");
   }
 
-  const profileImageLocalPath = req.files?.profileImage[0]?.path;
+  let profileImageLocalPath;
+
+if (
+  req.files &&
+  Array.isArray(req.files.profileImage) &&
+  req.files.profileImage.length > 0
+) {
+  profileImageLocalPath = req.files.profileImage[0].path;
+}
+
+  // const profileImageLocalPath = req.files?.profileImage[0]?.path;
   //const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
   let coverImageLocalPath;
@@ -62,6 +72,7 @@ const userRegister = asyncHandler(async (req, res) => {
 
   const profileImage = await uploadOnCloudinary(profileImageLocalPath);
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  
   // console.log("profile:", profileImage)
   // console.log("cover:",  coverImage)
 
@@ -71,8 +82,8 @@ const userRegister = asyncHandler(async (req, res) => {
 
   const user = await User.create({
     username: username.toLowerCase(),
-    profileImage: profileImage.url,
-    coverImage: coverImage?.url || "",
+    profileImage: profileImage.secure_url,
+    coverImage: coverImage?.secure_url || "",
     email,
     password,
   });
@@ -86,14 +97,14 @@ const userRegister = asyncHandler(async (req, res) => {
 
 //Login
 const loggedInUser = asyncHandler(async (req, res) => {
-  const { username, email, password } = req.body;
+  const { identifier, password } = req.body;
 
-  if (!email && !username) {
-    throw ApiError.badRequest("Invalid email or username");
+  if (!identifier && !password) {
+    throw ApiError.badRequest("Email/username or password are required");
   }
 
   const user = await User.findOne({
-    $or: [{ email }, { username }],
+    $or: [{ email: identifier }, { username: identifier }],
   });
 
   if (!user) {
