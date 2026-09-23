@@ -5,6 +5,9 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import mongoose, { isValidObjectId } from "mongoose";
 import { Video } from "../models/video.model.js";
 import { v2 as cloudindary } from "cloudinary";
+import { videoCompression } from "../services/video.service.js";
+import crypto from "crypto";
+import fs from "fs"
 
 // geting all the videos
 const getAllVideos = asyncHandler(async (req, res) => {
@@ -70,8 +73,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
 // uploading the video in cloudinary
 const publishVideo = asyncHandler(async (req, res) => {
-  // console.log("BODY:", req.body);
-  // console.log("FILES:", req.files);
   const { title, description } = req.body;
 
   if ([title, description].some((field) => !field || field.trim() == "")) {
@@ -80,6 +81,7 @@ const publishVideo = asyncHandler(async (req, res) => {
 
   const videoLocalPath = req.files?.videoFile?.[0]?.path;
   const thumbnailLocalPath = req.files?.thumbnail?.[0]?.path;
+  const outputPath = `./public/temp/compressed-${crypto.randomUUID()}.mp4`;
 
   if (!videoLocalPath) {
     throw ApiError.badRequest("videoFileLocalPath is required");
@@ -88,7 +90,11 @@ const publishVideo = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("thumbnailLocalPath is required");
   }
 
-  const videoFile = await uploadOnCloudinary(videoLocalPath);
+  const compressedVideo = await videoCompression(videoLocalPath, outputPath);
+
+  const videoFile = await uploadOnCloudinary(compressedVideo);
+  fs.unlinkSync(videoFile)
+
   const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
 
   if (!videoFile) {
@@ -97,8 +103,7 @@ const publishVideo = asyncHandler(async (req, res) => {
   if (!thumbnail) {
     throw ApiError.badRequest("Thumbnail not found");
   }
- console.log("VIDEO FILE:", videoFile);
-console.log("THUMBNAIL:", thumbnail);
+
   const video = await Video.create({
     title,
     description,
@@ -114,12 +119,6 @@ console.log("THUMBNAIL:", thumbnail);
     owner: req.user?._id,
     isPublished: false,
   });
-
-  const videoUploaded = await Video.findById(video._id);
-
-  if (!videoUploaded) {
-    throw ApiError.badRequest("Video uploaded faild please try again later ");
-  }
 
   return res
     .status(200)
@@ -249,7 +248,7 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     videoId,
     {
       $set: {
-        isPublished: !video.isPublished ,
+        isPublished: !video.isPublished,
       },
     },
     { new: true }
@@ -275,13 +274,7 @@ const getMyVideos = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        videos,
-        "User videos fetched successfully"
-      )
-    );
+    .json(new ApiResponse(200, videos, "User videos fetched successfully"));
 });
 
 export {
@@ -291,5 +284,5 @@ export {
   updateVideo,
   deleteVideo,
   togglePublishStatus,
-  getMyVideos
+  getMyVideos,
 };
