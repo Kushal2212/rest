@@ -7,25 +7,19 @@ import { Video } from "../models/video.model.js";
 import { v2 as cloudindary } from "cloudinary";
 import { videoCompression } from "../services/video.service.js";
 import crypto from "crypto";
-import fs from "fs"
+import fs from "fs";
 
 // geting all the videos
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
-
   const pipeline = [];
 
-  if (query) {
+  if (query && typeof query === "string") {
+    const searchRegex = new RegExp(query.trim(), "i");
+
     pipeline.push({
       $match: {
-        $or: [
-          {
-            title: { $regex: query, options: "i" },
-          },
-          {
-            description: { $regex: query, options: "i" },
-          },
-        ],
+        $or: [{ title: searchRegex }, { description: searchRegex }],
       },
     });
   }
@@ -65,6 +59,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
     page: parseInt(page, 10),
     limit: parseInt(limit, 10),
   });
+  
 
   return res
     .status(200)
@@ -93,8 +88,7 @@ const publishVideo = asyncHandler(async (req, res) => {
   const compressedVideo = await videoCompression(videoLocalPath, outputPath);
 
   const videoFile = await uploadOnCloudinary(compressedVideo);
-  fs.unlinkSync(videoFile)
-
+  fs.unlinkSync(videoLocalPath);
   const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
 
   if (!videoFile) {
